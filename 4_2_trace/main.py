@@ -1,27 +1,28 @@
-import pyb, sensor, image, time, math
+import pyb, sensor, image, time
+enable_lens_corr = False
 sensor.reset()
 sensor.set_pixformat(sensor.RGB565)
 sensor.set_framesize(sensor.QQVGA)
 sensor.skip_frames(time = 2000)
-sensor.set_auto_gain(False)
-sensor.set_auto_whitebal(False)
 clock = time.clock()
-f_x = (2.8 / 3.984) * 160
-f_y = (2.8 / 2.952) * 120
-c_x = 160 * 0.5
-c_y = 120 * 0.5
-def degrees(radians):
-   return (180 * radians) / math.pi
 uart = pyb.UART(3,9600,timeout_char=1000)
 uart.init(9600,bits=8,parity = None, stop=1, timeout_char=1000)
-while(True):
+hasFind = 0;
+k = 1;
+while(k):
+   hasFind = 0;
    clock.tick()
    img = sensor.snapshot()
-   for tag in img.find_apriltags(fx=f_x, fy=f_y, cx=c_x, cy=c_y):
-	  img.draw_rectangle(tag.rect(), color = (255, 0, 0))
-	  img.draw_cross(tag.cx(), tag.cy(), color = (0, 255, 0))
-	  print_args = (tag.x_translation(), degrees(tag.y_rotation()))
-	  uart.write("/findTag/run %f %f\r\n" % print_args)
-	  print(("/findTag/run %f %f" % print_args).encode())
-   uart.write(("FPS %f\r\n" % clock.fps()).encode())
-   time.sleep_ms(1000)
+   if enable_lens_corr: img.lens_corr(1.8)
+   for l in img.find_line_segments(merge_distance = 10, max_theta_diff = 5):
+	  if ( l.y1() < 5 and l.x1() > 50):
+		hasFind = 1
+		img.draw_line(l.line(), color = (255, 0, 0))
+		print(l)
+		print_args = (l.theta())
+		uart.write(("/goStraight/run 55 \r\n").encode())
+		break
+   if(hasFind != 1):
+	  print("FPS %f" % clock.fps())
+	  uart.write(("/stop/run \n").encode())
+   k = 1
